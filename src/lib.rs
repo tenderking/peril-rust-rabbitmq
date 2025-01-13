@@ -1,3 +1,3 @@
 pub mod gamelogic;
-mod routing;
-mod pubsub;
+pub mod routing;
+pub mod pubsub;

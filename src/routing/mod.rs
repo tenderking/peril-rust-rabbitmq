@@ -1,18 +1,52 @@
+use lapin::ExchangeKind;
+use lapin::ExchangeKind::{Direct, Topic};
+use serde::{Deserialize, Serialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct PlayingState {
-    is_paused: bool,
+    pub is_paused: bool,
 }
-
+#[derive(Serialize, Deserialize)]
 pub struct GameLog{
-    current_time: String,
-    message: String,
-    username: String,
+   pub current_time: String,
+   pub message: String,
+   pub username: String,
 }
 
-pub const ARMY_MOVES_PREFIX: &str = "army_moves";
-pub const WAR_RECOGNITIONS_PREFIX: &str = "war";
-pub const PAUSE_KEY: &str = "pause";
-pub const GAME_LOG_SLUG: &str = "game_logs";
+pub enum RoutingKey {
+    ArmyMoves(String),       // "army_moves.{game_id}"
+    WarRecognition(String), // "war.{game_id}"
+    Pause(String),          // "pause.{game_id}"
+    GameLog(String),        // "game_logs.{game_id}"
+}
 
-pub const EXCHANGE_PERIL_DIRECT: &str = "peril_direct";
-pub const EXCHANGE_PERIL_TOPIC: &str = "peril_topic";
+impl RoutingKey {
+    pub fn as_str(&self) -> String {
+        match self {
+            RoutingKey::ArmyMoves(game_id) => format!("army_moves.{}", game_id),
+            RoutingKey::WarRecognition(game_id) => format!("war.{}", game_id),
+            RoutingKey::Pause(game_id) => format!("pause.{}", game_id),
+            RoutingKey::GameLog(game_id) => format!("game_logs.{}", game_id),
+        }
+    }
+}
+
+pub enum Exchange {
+    PerilDirect,
+    PerilTopic,
+}
+
+impl Exchange {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Exchange::PerilDirect => "peril_direct",
+            Exchange::PerilTopic => "peril_topic",
+        }
+    }
+    pub fn exchange_type(&self) -> ExchangeKind {
+        match self {
+            Exchange::PerilDirect => Direct,
+            Exchange::PerilTopic => Topic
+        }
+    }
+}
