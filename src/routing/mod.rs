@@ -12,7 +12,7 @@ pub struct GameLog{
    pub message: String,
    pub username: String,
 }
-
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RoutingKey {
     ArmyMoves(String),       // "army_moves.{game_id}"
     WarRecognition(String), // "war.{game_id}"

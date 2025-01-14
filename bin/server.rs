@@ -1,10 +1,13 @@
 use lapin::{Connection, ConnectionProperties};
 use risk_rust::gamelogic::gamelogic::get_input;
-use risk_rust::pubsub::publish_json;
-use risk_rust::routing;
+use risk_rust::{pubsub, routing};
 use signal_hook::{consts::TERM_SIGNALS, iterator::Signals};
 use std::sync::mpsc;
 use std::thread;
+use lapin::options::ExchangeDeclareOptions;
+use lapin::types::FieldTable;
+use risk_rust::pubsub::declare_and_bind;
+use risk_rust::pubsub::publish::{ publish_json};
 
 #[tokio::main]
 async fn main() {
@@ -19,8 +22,7 @@ async fn main() {
             return;
         }
     };
-
-    let rabbitmq_channel = match conn.create_channel().await {
+    let publish_channel = match conn.create_channel().await {
         Ok(channel) => channel,
         Err(err) => {
             eprintln!("Error creating RabbitMQ channel: {}", err);
@@ -28,14 +30,34 @@ async fn main() {
         }
     };
 
-    publish_json(
-        rabbitmq_channel.clone(),
-        routing::Exchange::PerilDirect,
-        &*routing::RoutingKey::Pause(String::from("")).as_str(),
-        routing::PlayingState { is_paused: true },
+let _exchange =     match & publish_channel.clone()
+    .exchange_declare(
+        routing::Exchange::PerilTopic.as_str(), // Exchange name
+        routing::Exchange::PerilTopic.exchange_type(),
+        ExchangeDeclareOptions {
+            passive: false,     // Don't check if the exchange exists
+            durable: true,      // Make the exchange persistent
+            auto_delete: false, // Don't delete the exchange when unused
+            internal: false,    // Allow external publishers/consumers
+            nowait: false,      // Wait for a confirmation from the server
+        },
+        FieldTable::default(), // No special arguments
     )
     .await
-    .expect("TODO: panic message");
+{
+    Ok(_) => {}
+    Err(_e_) => {}
+};
+    let _q = declare_and_bind(
+        & publish_channel,
+        routing::Exchange::PerilTopic.as_str(),
+        routing::RoutingKey::GameLog(String::from("*")),
+        pubsub::SimpleQueueType::Durable,
+    )
+        .await
+        .expect("Error binding the queue");
+
+
     println!("Starting Peril server...");
 
     // Create a thread for signal handling
@@ -51,8 +73,8 @@ async fn main() {
             "pause" => {
                 println!("Pausing the game");
                 publish_json(
-                    rabbitmq_channel.clone(),
-                    routing::Exchange::PerilDirect,
+                    publish_channel.clone(),
+                    routing::Exchange::PerilTopic,
                     &*routing::RoutingKey::Pause(String::from("")).as_str(),
                     routing::PlayingState { is_paused: true },
                 )
@@ -62,8 +84,8 @@ async fn main() {
             "resume" => {
                 println!("Resuming the game");
                 publish_json(
-                    rabbitmq_channel.clone(),
-                    routing::Exchange::PerilDirect,
+                    publish_channel.clone(),
+                    routing::Exchange::PerilTopic,
                     &*routing::RoutingKey::Pause(String::from("")).as_str(),
                     routing::PlayingState { is_paused: false },
                 )

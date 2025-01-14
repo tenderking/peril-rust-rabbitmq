@@ -2,12 +2,14 @@ use risk_rust::gamelogic::gamelogic::{client_welcome, get_input, print_client_he
 
 use lapin::{Connection, ConnectionProperties};
 use risk_rust::gamelogic::gamestate::GameState;
+use risk_rust::gamelogic::pause::handle_pause;
 use risk_rust::pubsub::declare_and_bind;
 use risk_rust::{pubsub, routing};
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::iterator::Signals;
 use std::sync::mpsc;
 use std::thread;
+
 
 #[tokio::main]
 async fn main() {
@@ -22,6 +24,13 @@ async fn main() {
             return;
         }
     };
+    let sub_channel = match conn.create_channel().await {
+        Ok(channel) => channel,
+        Err(err) => {
+            eprintln!("Error creating RabbitMQ channel: {}", err);
+            return;
+        }
+    };
     let username = match client_welcome() {
         Ok(username) => username,
         Err(_err) => {
@@ -29,16 +38,19 @@ async fn main() {
         }
     };
     print!("Hello, {:?}", &username);
-    let (_ch, _q) = declare_and_bind(
-        conn,
-        routing::Exchange::PerilDirect.as_str(),
-        &*routing::RoutingKey::Pause(String::from(&username)).as_str(),
+    let q = declare_and_bind(
+        &sub_channel,
+        routing::Exchange::PerilTopic.as_str(),
+        routing::RoutingKey::Pause(String::from(&username)),
         pubsub::SimpleQueueType::Durable,
     )
     .await
     .expect("Error binding the queue");
 
-    let game_state = GameState::new(&*username);
+    let mut game_state = GameState::new(&*username);
+    pubsub::subscribe::subscribe_json(&sub_channel, &q, |ps| handle_pause(&mut game_state, ps))
+        .await
+        .expect("TODO: panic message");
     loop {
         let word = get_input();
 
@@ -49,27 +61,21 @@ async fn main() {
         match word[0].as_str() {
             "spawn" => {
                 println!("Spawning a new player...");
-               match GameState::command_spawn(&mut game_state.clone(), word)  {
-                   Ok(_) => {
-
-                   }
-                   Err(err) => {
-                       println!("{}", err);
-                   }
-               }
-
+                match GameState::command_spawn(&mut game_state.clone(), word) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        println!("{}", err);
+                    }
+                }
             }
             "move" => {
                 println!("Moving a player...");
-               match GameState::command_move(&mut game_state.clone(), word){
-                   Ok(_) => {
-
-                   }
-                   Err(err) => {
-                       println!("{}", err);
-                   }
-               }
-
+                match GameState::command_move(&mut game_state.clone(), word) {
+                    Ok(_) => {}
+                    Err(err) => {
+                        println!("{}", err);
+                    }
+                }
             }
             "status" => {
                 println!("Checking the status of the game...");
