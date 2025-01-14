@@ -22,7 +22,7 @@ pub fn print_server_help() {
     println!("* quit");
     println!("* help");
 }
-fn get_input() -> Vec<String> {
+pub fn get_input() -> Vec<String> {
     let mut input = String::new();
     io::stdin()
         .read_line(&mut input)
@@ -43,7 +43,7 @@ pub fn client_welcome() -> Result<String, &'static str> {
     let username = words[0].trim();
     Ok(username.to_string())
 }
-fn get_malicious_log() -> String {
+pub fn get_malicious_log() -> String {
     let possible_logs = vec![
         "Never interrupt your enemy when he is making a mistake.".to_string(),
         "The hardest thing of all for a soldier is to retreat.".to_string(),

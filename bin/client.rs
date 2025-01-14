@@ -1,7 +1,8 @@
-use risk_rust::gamelogic::gamelogic::client_welcome;
+use risk_rust::gamelogic::gamelogic::{client_welcome, get_input, print_client_help, print_quit};
 
 use lapin::{Connection, ConnectionProperties};
-use risk_rust::pubsub::{declare_and_bind};
+use risk_rust::gamelogic::gamestate::GameState;
+use risk_rust::pubsub::declare_and_bind;
 use risk_rust::{pubsub, routing};
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::iterator::Signals;
@@ -28,17 +29,61 @@ async fn main() {
         }
     };
     print!("Hello, {:?}", &username);
-    let (ch,q)=declare_and_bind(
+    let (_ch, _q) = declare_and_bind(
         conn,
         routing::Exchange::PerilDirect.as_str(),
-        &*routing::RoutingKey::Pause(String::from(username)).as_str(),
+        &*routing::RoutingKey::Pause(String::from(&username)).as_str(),
         pubsub::SimpleQueueType::Durable,
     )
     .await
     .expect("TODO: panic message");
 
-    print!("Connected to channel {:?} and created queue {:?}", &ch, &q);
+    let game_state = GameState::new(&*username);
+    loop {
+        let word = get_input();
 
+        if word.len() == 0 {
+            continue;
+        }
+
+        match word[0].as_str() {
+            "spawn" => {
+                println!("Spawning a new player...");
+               match GameState::command_spawn(&mut game_state.clone(), word)  {
+                   Ok(_) => {
+
+                   }
+                   Err(err) => {
+                       println!("{}", err);
+                   }
+               }
+
+            }
+            "move" => {
+                println!("Moving a player...");
+               match GameState::command_move(&mut game_state.clone(), word){
+                   Ok(_) => {
+
+                   }
+                   Err(err) => {
+                       println!("{}", err);
+                   }
+               }
+
+            }
+            "status" => {
+                println!("Checking the status of the game...");
+                GameState::command_status(&game_state)
+            }
+            "spam" => println!("Spamming not allowed yet!"),
+            "help" => print_client_help(),
+            "quit" => {
+                print_quit();
+                break;
+            }
+            _ => println!("Invalid command. Please try again."),
+        }
+    }
     // Create a thread for signal handling
     let signal_done_sender = done_sender.clone();
     thread::spawn(move || {
