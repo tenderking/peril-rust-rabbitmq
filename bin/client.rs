@@ -36,7 +36,7 @@ async fn main() {
         pubsub::SimpleQueueType::Durable,
     )
     .await
-    .expect("TODO: panic message");
+    .expect("Error binding the queue");
 
     let game_state = GameState::new(&*username);
     loop {
