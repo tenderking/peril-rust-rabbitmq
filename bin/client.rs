@@ -1,15 +1,16 @@
+mod handler;
+
 use risk_rust::gamelogic::gamelogic::{client_welcome, get_input, print_client_help, print_quit};
 
 use lapin::{Connection, ConnectionProperties};
 use risk_rust::gamelogic::gamestate::GameState;
-use risk_rust::gamelogic::pause::handle_pause;
 use risk_rust::pubsub::declare_and_bind;
 use risk_rust::{pubsub, routing};
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::iterator::Signals;
 use std::sync::mpsc;
 use std::thread;
-
+use crate::handler::handler_pause;
 
 #[tokio::main]
 async fn main() {
@@ -48,7 +49,7 @@ async fn main() {
     .expect("Error binding the queue");
 
     let mut game_state = GameState::new(&*username);
-    pubsub::subscribe::subscribe_json(&sub_channel, &q, |ps| handle_pause(&mut game_state, ps))
+    pubsub::subscribe::subscribe_json(&sub_channel, &q,  handler_pause(&mut game_state))
         .await
         .expect("TODO: panic message");
     loop {
