@@ -8,8 +8,9 @@ use risk_rust::pubsub::declare_and_bind;
 use risk_rust::{pubsub, routing};
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::iterator::Signals;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::thread;
+use std::sync::Mutex;
 use crate::handler::handler_pause;
 
 #[tokio::main]
@@ -32,26 +33,35 @@ async fn main() {
             return;
         }
     };
-    let username = match client_welcome() {
+    let username = match client_welcome().await {
         Ok(username) => username,
         Err(_err) => {
             return;
         }
     };
+    let game_state = Arc::new(Mutex::new(GameState::new(&*username)));
+    let game_state_clone = Arc::clone(&game_state);
+    tokio::spawn(async move  {
+
+    let queue_name: String = routing::RoutingKey::Pause(username.clone().as_str().parse().unwrap()).as_str();
+
     print!("Hello, {:?}", &username);
-    let q = declare_and_bind(
+    let _q = declare_and_bind(
         &sub_channel,
         routing::Exchange::PerilTopic.as_str(),
-        routing::RoutingKey::Pause(String::from(&username)),
-        pubsub::SimpleQueueType::Durable,
+        &queue_name,
+        &routing::RoutingKey::Pause(String::from("*")).as_str(),
+        &pubsub::SimpleQueueType::Durable,
     )
     .await
     .expect("Error binding the queue");
 
-    let mut game_state = GameState::new(&*username);
-    pubsub::subscribe::subscribe_json(&sub_channel, &q,  handler_pause(&mut game_state))
+    pubsub::subscribe::subscribe_json(&sub_channel, &queue_name.as_str(),  handler_pause(game_state))
         .await
         .expect("TODO: panic message");
+    });
+
+
     loop {
         let word = get_input();
 
@@ -62,25 +72,50 @@ async fn main() {
         match word[0].as_str() {
             "spawn" => {
                 println!("Spawning a new player...");
-                match GameState::command_spawn(&mut game_state.clone(), word) {
-                    Ok(_) => {}
+                match game_state_clone.lock() {
+                    Ok(mut game_state) => {
+                        match game_state.command_spawn(word) {
+                            Ok(_) => {}
+                            Err(err) => {
+                                println!("{}", err);
+                            }
+                        }
+                    }
                     Err(err) => {
-                        println!("{}", err);
+                        eprintln!("Failed to acquire lock: {}", err);
                     }
                 }
+
             }
             "move" => {
                 println!("Moving a player...");
-                match GameState::command_move(&mut game_state.clone(), word) {
-                    Ok(_) => {}
+                match game_state_clone.lock() {
+                    Ok(mut game_state) => {
+                        match game_state.command_move(word) {
+                            Ok(_) => {}
+                            Err(err) => {
+                                println!("{}", err);
+                            }
+                        }
+                    }
                     Err(err) => {
-                        println!("{}", err);
+                        eprintln!("Failed to acquire lock: {}", err);
                     }
                 }
+
+
             }
             "status" => {
                 println!("Checking the status of the game...");
-                GameState::command_status(&game_state)
+                match game_state_clone.lock() {
+                    Ok(game_state) => {
+                        game_state.command_status();
+                    }
+                    Err(err) => {
+                        eprintln!("Failed to acquire lock: {}", err);
+                    }
+                }
+
             }
             "spam" => println!("Spamming not allowed yet!"),
             "help" => print_client_help(),

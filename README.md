@@ -1,6 +1,6 @@
 # Rust RabbitMQ Project -  Peril(Similar to Risk Board Game)
 This project demonstrates a simple client-server application using RabbitMQ in Rust with a game called Peril. It is based on the boot.dev learn pub sub course using go. It includes:
-
+![img.png](img.png)
 Server: A Rust program that listens for messages on a RabbitMQ queue.
 Client: A Rust program that sends messages to a RabbitMQ queue.
 Scripts: Bash scripts to simplify running multiple clients and managing the RabbitMQ Docker container.

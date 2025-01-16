@@ -1,5 +1,5 @@
-pub mod gamelogic;
-pub mod gamestate;
 pub mod gamedata;
-mod gamemove;
+pub mod gamelogic;
+pub mod gamemove;
+pub mod gamestate;
 pub mod pause;

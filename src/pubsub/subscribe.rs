@@ -1,13 +1,15 @@
 use std::error::Error;
-use lapin::{Channel, Queue};
+use lapin::{Channel};
 use lapin::options::{BasicAckOptions, BasicConsumeOptions, BasicNackOptions};
 use lapin::types::FieldTable;
 use serde::Deserialize;
 use futures_lite::stream::StreamExt;
 
+
+
 pub async fn subscribe_json<T, F>(
     channel: &Channel,
-    queue: &Queue,
+    queue_name: &str,
     mut handler: F,
 ) -> Result<(), Box<dyn Error>>
 where
@@ -18,14 +20,15 @@ where
 
     let mut consumer = channel
         .basic_consume(
-            queue.name().as_str(),
+            queue_name,
             consumer_tag.as_str(),
             BasicConsumeOptions::default(),
             FieldTable::default(),
         )
         .await?;
 
-    println!(" [*] Waiting for messages on {}. To exit press CTRL+C", queue.name());
+    println!(" [*] Waiting for messages on {}. To exit press CTRL+C", queue_name);
+
     while let Some(delivery_result) = consumer.next().await {
         let delivery = delivery_result?;
         let value = serde_json::from_slice::<serde_json::Value>(&delivery.data)?;

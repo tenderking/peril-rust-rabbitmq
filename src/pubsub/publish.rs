@@ -1,17 +1,13 @@
-
-
-use lapin::options::{
-    BasicPublishOptions,
-};
+use crate::routing::Exchange;
+use lapin::options::BasicPublishOptions;
 use lapin::{BasicProperties, Channel, Error};
 use serde::Serialize;
 use std::time::Duration;
 use tokio::time::timeout;
-use crate::routing::{Exchange};
 
 pub async fn publish_json<T: Serialize>(
     ch: Channel,
-    exchange:  Exchange,
+    exchange: Exchange,
     key: &str,
     val: T,
 ) -> Result<(), Error> {
@@ -27,7 +23,7 @@ pub async fn publish_json<T: Serialize>(
             BasicProperties::default().with_content_type("application/json".into()),
         ),
     )
-        .await
+    .await
     {
         Ok(_) => {}
         Err(_e_) => {}
@@ -36,5 +32,3 @@ pub async fn publish_json<T: Serialize>(
     println!("Message published!");
     Ok(())
 }
-
-

@@ -1,7 +1,6 @@
-use lapin::{Channel, Error, Queue};
 use lapin::options::{QueueBindOptions, QueueDeclareOptions};
 use lapin::types::FieldTable;
-use crate::routing::RoutingKey;
+use lapin::{Channel, Error, Queue};
 
 pub mod publish;
 pub mod subscribe;
@@ -23,14 +22,13 @@ impl SimpleQueueType {
 pub async fn declare_and_bind(
     ch: &Channel,
     exchange: &str,
-    key: RoutingKey,
-    simple_queue_type: SimpleQueueType,
+    q_name: &str,
+    key: &str,
+    simple_queue_type: &SimpleQueueType,
 ) -> Result<Queue, Error> {
-
-
     let q: Queue = match ch
         .queue_declare(
-            exchange,
+            q_name,
             QueueDeclareOptions {
                 nowait: false,
                 auto_delete: !simple_queue_type.as_bool(),
@@ -42,7 +40,10 @@ pub async fn declare_and_bind(
         )
         .await
     {
-        Ok(queue) => queue,
+        Ok(queue) => {
+            println!("created queue named {:?}", &queue.name());
+            queue
+        }
         Err(err) => {
             eprintln!("Error creating RabbitMQ queue: {}", err);
             return Err(err.into());
@@ -51,20 +52,23 @@ pub async fn declare_and_bind(
 
     match ch
         .queue_bind(
-            &q.name().as_str(),
-            exchange,
-            &*key.as_str(),
+            &q_name,
+            &exchange,
+            &key,
             QueueBindOptions::default(),
             FieldTable::default(),
         )
         .await
     {
-        Ok(bind) => bind,
+        Ok(bind) => {
+            println!("created queue bind {:?}", &bind);
+            bind
+        }
         Err(err) => {
             eprintln!("Error creating RabbitMQ queue: {}", err);
             return Err(err.into());
         }
     }
 
-    Ok( q)
+    Ok(q)
 }

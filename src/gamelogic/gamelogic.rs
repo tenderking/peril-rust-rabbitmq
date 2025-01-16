@@ -1,6 +1,6 @@
-use std::io::{self};
 use rand::prelude::*;
-pub fn  print_client_help() {
+use std::io::{self};
+pub fn print_client_help() {
     println!("Possible commands:");
     println!("* move <location> <unitID> <unitID> <unitID>...");
     println!("    example:");
@@ -27,13 +27,10 @@ pub fn get_input() -> Vec<String> {
     io::stdin()
         .read_line(&mut input)
         .expect("Failed to read input");
-    input
-        .split_whitespace()
-        .map(|x| x.to_string())
-        .collect()
+    input.split_whitespace().map(|x| x.to_string()).collect()
 }
 
-pub fn client_welcome() -> Result<String, &'static str> {
+pub async fn client_welcome() -> Result<String, &'static str> {
     println!("Welcome to the Peril client");
     println!("Please enter your username:");
     let words = get_input();
