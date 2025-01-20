@@ -1,11 +1,15 @@
-use std::error::Error;
-use lapin::{Channel};
+use futures_lite::stream::StreamExt;
 use lapin::options::{BasicAckOptions, BasicConsumeOptions, BasicNackOptions};
 use lapin::types::FieldTable;
+use lapin::Channel;
 use serde::Deserialize;
-use futures_lite::stream::StreamExt;
+use std::error::Error;
 
-
+pub enum AckType {
+    Ack,
+    NackRequeue,
+    NackDiscard,
+}
 
 pub async fn subscribe_json<T, F>(
     channel: &Channel,
@@ -14,7 +18,7 @@ pub async fn subscribe_json<T, F>(
 ) -> Result<(), Box<dyn Error>>
 where
     T: for<'de> Deserialize<'de>,
-    F: FnMut(T),
+    F: FnMut(T) -> AckType,
 {
     let consumer_tag = String::new();
 
@@ -27,18 +31,44 @@ where
         )
         .await?;
 
-    println!(" [*] Waiting for messages on {}. To exit press CTRL+C", queue_name);
+    println!(
+        " [*] Waiting for messages on {}. To exit press CTRL+C",
+        queue_name
+    );
 
     while let Some(delivery_result) = consumer.next().await {
         let delivery = delivery_result?;
         let value = serde_json::from_slice::<serde_json::Value>(&delivery.data)?;
         match serde_json::from_value::<T>(value.clone()) {
-            Ok(target) => {
-                handler(target);
-                delivery.ack(BasicAckOptions::default()).await?;
-            }
+            Ok(target) => match handler(target) {
+                AckType::Ack => {
+                    delivery.ack(BasicAckOptions::default()).await?;
+                    println!("Acked");
+                }
+                AckType::NackRequeue => {
+                    delivery
+                        .nack(BasicNackOptions {
+                            multiple: false,
+                            requeue: true,
+                        })
+                        .await?;
+                    println!("Nack Requeue");
+                }
+                _ => {
+                    delivery
+                        .nack(BasicNackOptions {
+                            multiple: false,
+                            requeue: false,
+                        })
+                        .await?;
+                    println!("Nack Discarded");
+                }
+            },
             Err(e) => {
-                eprintln!("Error deserializing message: {:?}, raw message: {}", e, value);
+                eprintln!(
+                    "Error deserializing message: {:?}, raw message: {}",
+                    e, value
+                );
                 delivery.nack(BasicNackOptions::default()).await?;
             }
         }

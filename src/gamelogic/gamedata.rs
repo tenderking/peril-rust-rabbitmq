@@ -1,30 +1,30 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Player {
     pub username: String,
     pub units: HashMap<i32, Unit>,
 }
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct ArmyMove {
     pub player: Player,
     pub units: Vec<Unit>,
     pub to_location: Location,
 }
-
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct RecognitionOfWar {
     pub attacker: Player,
     pub defender: Player,
 }
 
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Unit {
     pub id: i32,
     pub rank: UnitRank,
     pub location: Location,
 }
-#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Deserialize)]
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug, Deserialize, Serialize)]
 pub enum UnitRank {
     Infantry,
     Cavalry,
@@ -40,7 +40,7 @@ impl UnitRank {
     }
 }
 
-#[derive(Eq, PartialEq, Hash, Clone, Debug, Deserialize)]
+#[derive(Eq, PartialEq, Hash, Clone, Debug, Deserialize, Serialize)]
 pub struct Location(pub String);
 
 impl Location {

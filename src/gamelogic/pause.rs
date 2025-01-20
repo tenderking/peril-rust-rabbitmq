@@ -2,7 +2,7 @@ use crate::gamelogic::gamestate::GameState;
 use crate::routing::PlayingState;
 
 impl GameState {
-    pub fn handle_pause( &mut self, playing_state: PlayingState) {
+    pub fn handle_pause(&mut self, playing_state: PlayingState) {
         println!("-------------------------");
         if playing_state.is_paused {
             println!("==== Pause Detected ====");

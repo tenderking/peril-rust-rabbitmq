@@ -21,7 +21,7 @@ pub enum RoutingKey {
 }
 
 impl RoutingKey {
-    pub fn as_str(& self) -> String {
+    pub fn as_str(&self) -> String {
         match self {
             RoutingKey::ArmyMoves(game_id) => format!("army_moves.{}", game_id),
             RoutingKey::WarRecognition(game_id) => format!("war.{}", game_id),
