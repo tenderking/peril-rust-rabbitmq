@@ -1,8 +1,11 @@
 use futures_lite::stream::StreamExt;
-use lapin::options::{BasicAckOptions, BasicConsumeOptions, BasicNackOptions};
+use lapin::message::Delivery;
+use lapin::options::{BasicAckOptions, BasicConsumeOptions, BasicNackOptions, BasicQosOptions};
 use lapin::types::FieldTable;
 use lapin::Channel;
+use postcard::from_bytes;
 use serde::Deserialize;
+use serde_json::Value;
 use std::error::Error;
 
 pub enum AckType {
@@ -11,15 +14,19 @@ pub enum AckType {
     NackDiscard,
 }
 
-pub async fn subscribe_json<T, F>(
+async fn subscribe<T, F, D>(
     channel: &Channel,
     queue_name: &str,
     mut handler: F,
-) -> Result<(), Box<dyn Error>>
+    deserializer: D,
+) -> Result<(), Box<dyn Error + Send + Sync>>
+// Updated
 where
     T: for<'de> Deserialize<'de>,
     F: FnMut(T) -> AckType,
+    D: Fn(&Delivery) -> Result<T, Box<dyn Error + Send + Sync>>, // Updated
 {
+    let _qos = channel.basic_qos(10, BasicQosOptions::default());
     let consumer_tag = String::new();
 
     let mut consumer = channel
@@ -38,8 +45,7 @@ where
 
     while let Some(delivery_result) = consumer.next().await {
         let delivery = delivery_result?;
-        let value = serde_json::from_slice::<serde_json::Value>(&delivery.data)?;
-        match serde_json::from_value::<T>(value.clone()) {
+        match deserializer(&delivery) {
             Ok(target) => match handler(target) {
                 AckType::Ack => {
                     delivery.ack(BasicAckOptions::default()).await?;
@@ -65,14 +71,54 @@ where
                 }
             },
             Err(e) => {
-                eprintln!(
-                    "Error deserializing message: {:?}, raw message: {}",
-                    e, value
-                );
+                eprintln!("Error deserializing message: {:?}, ", e);
                 delivery.nack(BasicNackOptions::default()).await?;
             }
         }
     }
 
     Ok(())
+}
+
+fn json_deserialize<T: for<'de> Deserialize<'de>>(
+    delivery: &Delivery,
+) -> Result<T, Box<dyn Error + Send + Sync>> {
+    let value = serde_json::from_slice::<Value>(&delivery.data)?;
+    let unmarshalled = serde_json::from_value::<T>(value.clone())?;
+    Ok(unmarshalled)
+}
+fn postcard_deserialize<'a, T: Deserialize<'a>>(
+    delivery: &'a Delivery,
+) -> Result<T, Box<dyn Error + Send + Sync>> {
+    let unmarshalled: T = from_bytes(&delivery.data)?;
+    Ok(unmarshalled)
+}
+pub async fn subscribe_json<T, F>(
+    channel: &Channel,
+    queue_name: &str,
+    handler: F,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+where
+    T: for<'de> Deserialize<'de>,
+    F: FnMut(T) -> AckType,
+{
+    subscribe(channel, queue_name, handler, |delivery| {
+        json_deserialize::<T>(delivery)
+    })
+    .await
+}
+
+pub async fn subscribe_postcard<T, F>(
+    channel: &Channel,
+    queue_name: &str,
+    handler: F,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+where
+    T: for<'de> Deserialize<'de>,
+    F: FnMut(T) -> AckType,
+{
+    subscribe(channel, queue_name, handler, |delivery| {
+        postcard_deserialize::<T>(delivery)
+    })
+    .await
 }

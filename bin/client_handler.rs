@@ -1,4 +1,4 @@
-use lapin::Channel;
+use lapin::{Connection, ConnectionProperties};
 use risk_rust::gamelogic::gamedata::{ArmyMove, RecognitionOfWar};
 use risk_rust::gamelogic::gamemove::MoveOutCome;
 use risk_rust::gamelogic::gamestate::GameState;
@@ -30,8 +30,22 @@ pub fn handler_pause(
 
 pub fn handler_moves(
     game_state: Arc<Mutex<GameState>>, // Using std::sync::Mutex
-    ch: Channel,
 ) -> impl FnMut(ArmyMove) -> AckType + Send + 'static {
+    const ADDR: &str = "amqp://guest:guest@localhost:5672/my_vhost";
+
+    let conn_future = async {
+        Connection::connect(&ADDR, ConnectionProperties::default())
+            .await
+            .expect("Error connecting to RabbitMQ")
+    };
+    let ch_future = async {
+        let conn = conn_future.await;
+        conn.create_channel()
+            .await
+            .expect("Error creating RabbitMQ channel")
+    };
+
+    let ch = tokio::task::block_in_place(|| Handle::current().block_on(ch_future));
     move |army_move: ArmyMove| {
         println!(">");
 
@@ -41,8 +55,8 @@ pub fn handler_moves(
                 MoveOutCome::Safe => AckType::NackDiscard,
                 MoveOutCome::MakeWar => {
                     let ch_clone = ch.clone();
-                    let attacker = game.player.clone();
-                    let defender = army_move.player.clone();
+                    let attacker = army_move.player.clone();
+                    let defender = game.player.clone();
 
                     // Capture the Tokio runtime handle before moving into the thread
                     let handle = Handle::current();

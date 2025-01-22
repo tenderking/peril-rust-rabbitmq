@@ -1,13 +1,18 @@
-mod handler;
+mod client_handler;
 
-use risk_rust::gamelogic::gamelogic::{client_welcome, get_input, print_client_help, print_quit};
+use risk_rust::gamelogic::gamelogic::{
+    client_welcome, get_input, get_malicious_log, print_client_help, print_quit,
+};
 
-use crate::handler::{handler_moves, handler_pause, handler_war};
+use crate::client_handler::{handler_moves, handler_pause, handler_war};
+use chrono::Utc;
 use lapin::{Connection, ConnectionProperties};
 use risk_rust::gamelogic::gamedata::{ArmyMove, Unit};
 use risk_rust::gamelogic::gamestate::GameState;
+use risk_rust::gamelogic::logs::init_logger;
 use risk_rust::pubsub::declare_and_bind;
 use risk_rust::pubsub::publish::publish_json;
+use risk_rust::routing::GameLog;
 use risk_rust::{pubsub, routing};
 use signal_hook::consts::TERM_SIGNALS;
 use signal_hook::iterator::Signals;
@@ -17,6 +22,7 @@ use std::thread;
 
 #[tokio::main]
 async fn main() {
+    init_logger();
     const ADDR: &str = "amqp://guest:guest@localhost:5672/my_vhost";
 
     let (done_sender, done_receiver) = mpsc::channel();
@@ -115,7 +121,7 @@ async fn main() {
         pubsub::subscribe::subscribe_json(
             &sub_channel,
             &queue_name.as_str(),
-            handler_moves(game_state_clone, sub_channel.clone()),
+            handler_moves(game_state_clone),
         )
         .await
         .expect("TODO: panic message");
@@ -244,7 +250,36 @@ async fn main() {
                     }
                 }
             }
-            "spam" => println!("Spamming not allowed yet!"),
+            "spam" => {
+                if word.len() >= 1 {
+                    if let Ok(_num) = word[1].parse::<i32>() {
+                        match game_state_clone.clone().lock() {
+                            Ok(game_state) => {
+                                for _i in 0..word[1].parse::<i32>().unwrap() {
+                                    let message = get_malicious_log();
+                                    publish_json(
+                                        publish_move_channel.clone(),
+                                        routing::Exchange::PerilTopic,
+                                        &routing::RoutingKey::GameLog(String::from(
+                                            game_state.get_player_snap().username,
+                                        ))
+                                        .clone()
+                                        .as_str(),
+                                        GameLog {
+                                            current_time: Utc::now(),
+                                            message,
+                                            username: game_state.get_player_snap().username,
+                                        },
+                                    )
+                                    .await
+                                    .expect("TODO: panic message");
+                                }
+                            }
+                            Err(_gerr) => {}
+                        }
+                    }
+                }
+            }
             "help" => print_client_help(),
             "quit" => {
                 print_quit();

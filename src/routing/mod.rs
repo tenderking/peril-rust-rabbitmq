@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use lapin::ExchangeKind;
 use lapin::ExchangeKind::{Direct, Topic};
 use serde::{Deserialize, Serialize};
@@ -6,12 +7,13 @@ use serde::{Deserialize, Serialize};
 pub struct PlayingState {
     pub is_paused: bool,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct GameLog {
-    pub current_time: String,
+    pub current_time: DateTime<Utc>,
     pub message: String,
     pub username: String,
 }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RoutingKey {
     ArmyMoves(String),      // "army_moves.{game_id}"
@@ -21,12 +23,20 @@ pub enum RoutingKey {
 }
 
 impl RoutingKey {
+    // Constants for base routing key values (without "DEFAULT")
+    pub const BASE_ARMY_MOVES: &'static str = "army_moves";
+    pub const BASE_WAR_RECOGNITION: &'static str = "war";
+    pub const BASE_PAUSE: &'static str = "pause";
+    pub const BASE_GAME_LOG: &'static str = "game_logs";
+
     pub fn as_str(&self) -> String {
         match self {
-            RoutingKey::ArmyMoves(game_id) => format!("army_moves.{}", game_id),
-            RoutingKey::WarRecognition(game_id) => format!("war.{}", game_id),
-            RoutingKey::Pause(game_id) => format!("pause.{}", game_id),
-            RoutingKey::GameLog(game_id) => format!("game_logs.{}", game_id),
+            RoutingKey::ArmyMoves(game_id) => format!("{}.{}", Self::BASE_ARMY_MOVES, game_id),
+            RoutingKey::WarRecognition(game_id) => {
+                format!("{}.{}", Self::BASE_WAR_RECOGNITION, game_id)
+            }
+            RoutingKey::Pause(game_id) => format!("{}.{}", Self::BASE_PAUSE, game_id),
+            RoutingKey::GameLog(game_id) => format!("{}.{}", Self::BASE_GAME_LOG, game_id),
         }
     }
 }

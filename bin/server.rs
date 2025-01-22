@@ -1,16 +1,22 @@
+mod server_handler;
 use lapin::options::ExchangeDeclareOptions;
 use lapin::types::FieldTable;
 use lapin::{Connection, ConnectionProperties};
+use risk_rust::gamelogic::gamelogic;
 use risk_rust::gamelogic::gamelogic::get_input;
+use risk_rust::gamelogic::logs::init_logger;
 use risk_rust::pubsub::declare_and_bind;
 use risk_rust::pubsub::publish::publish_json;
 use risk_rust::{pubsub, routing};
+use server_handler::handler_game_logs;
 use signal_hook::{consts::TERM_SIGNALS, iterator::Signals};
 use std::sync::mpsc;
 use std::thread;
 
 #[tokio::main]
 async fn main() {
+    init_logger();
+
     const ADDR: &str = "amqp://guest:guest@localhost:5672/my_vhost";
 
     let (done_sender, done_receiver) = mpsc::channel();
@@ -29,6 +35,8 @@ async fn main() {
             return;
         }
     };
+
+    gamelogic::print_server_help();
 
     let _exchange = match &publish_channel
         .clone()
@@ -49,15 +57,23 @@ async fn main() {
         Ok(_) => {}
         Err(_e_) => {}
     };
+    let binding = routing::RoutingKey::GameLog(String::from("*")).as_str();
     let _q = declare_and_bind(
         &publish_channel,
         routing::Exchange::PerilTopic.as_str(),
-        routing::Exchange::PerilTopic.as_str(),
-        &*routing::RoutingKey::GameLog(String::from("*")).as_str(),
+        routing::RoutingKey::BASE_GAME_LOG,
+        &binding,
         &pubsub::SimpleQueueType::Durable,
     )
+    .await;
+
+    pubsub::subscribe::subscribe_json(
+        &publish_channel,
+        &routing::RoutingKey::BASE_GAME_LOG,
+        handler_game_logs(),
+    )
     .await
-    .expect("Error binding the queue");
+    .expect("TODO: panic message");
 
     println!("Starting Peril server...");
 
